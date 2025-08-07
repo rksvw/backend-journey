@@ -1,5 +1,6 @@
 const { pool } = require("../db");
 const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 const isValidEmail = (em) => {
   const regex = /^[a-zA-Z]{1,}[\d?\D]{1,}[@]{1}[a-z]{2,}.[com]{3}$/g;
@@ -52,10 +53,25 @@ async function signup(req, res) {
       values
     );
 
+
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "User not found" });
     }
-    res.status(201).json({ users: result.rows });
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: result.rows.id, isAdmin: result.rows.isadmin },
+      process.env.PRIVATE_KEY,
+      { expiresIn: "7d" }
+    );
+
+    res
+      .cookie("access_token", token, {
+        httpOnly: true,
+        samSite: "Strict",
+      })
+      .status(201)
+      .json({ users: result.rows, token });
   } catch (err) {
     res.status(500).json({ msg: "Server Error 500" });
     throw new Error("Server Error:", err.message);

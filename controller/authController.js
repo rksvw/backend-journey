@@ -53,7 +53,6 @@ async function signup(req, res) {
       values
     );
 
-
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -78,6 +77,63 @@ async function signup(req, res) {
   }
 }
 
+async function login(req, res) {
+  const { handle, password } = req.body;
+
+  const query = [];
+  const values = [];
+  if (isValidEmail(handle)) {
+    query.push("email");
+  } else {
+    query.push("username");
+  }
+
+  values.push(handle);
+
+  if (password.length < 8) {
+    return res.json({ msg: "Password has to be 8 character long" });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM users WHERE ${query[0]}=$1;`,
+      values
+    );
+
+    const isCorrPass = await bcrypt.compare(password, result.rows[0].password);
+
+    if (!isCorrPass) {
+      return res.status(404).json({ error: "Incorrect password" });
+    }
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      { id: result.rows[0].id, isAdmin: result.rows[0].isadmin },
+      process.env.PRIVATE_KEY,
+      { expiresIn: "7d" }
+    );
+
+    res
+      .cookie("access_token", token, {
+        httpOnly: true,
+        samSite: "Strict",
+      })
+      .status(201)
+      .json({
+        users: result.rows[0],
+        token,
+      });
+  } catch (err) {
+    res.status(500).json({ msg: "Server Error 500" });
+    throw new Error("Server Error:", err.message);
+  }
+}
+
 module.exports = {
   signup,
+  login,
 };
